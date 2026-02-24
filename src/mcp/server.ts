@@ -1,5 +1,4 @@
 import { createServer, IncomingMessage, ServerResponse, Server as HttpServer } from 'node:http';
-import { randomUUID } from 'node:crypto';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
@@ -126,8 +125,12 @@ export class HuduMcpServer {
     const host = this.envConfig?.transport?.host || '0.0.0.0';
     const isGatewayMode = this.envConfig?.auth?.mode === 'gateway';
 
+    // Stateless mode: no session IDs. The gateway manages per-user sessions;
+    // the backend just processes each request independently.  This allows
+    // multiple clients (via the gateway) to hit the same server instance
+    // without "Server already initialized" errors.
     this.httpTransport = new StreamableHTTPServerTransport({
-      sessionIdGenerator: () => randomUUID(),
+      sessionIdGenerator: undefined,
       enableJsonResponse: true,
     });
 
