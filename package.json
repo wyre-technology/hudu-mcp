@@ -1,0 +1,45 @@
+{
+  "name": "hudu-mcp",
+  "version": "1.0.0",
+  "description": "MCP (Model Context Protocol) server for Hudu IT documentation platform",
+  "main": "dist/entry.js",
+  "bin": {
+    "hudu-mcp": "./dist/entry.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx src/index.ts",
+    "start": "node dist/entry.js",
+    "clean": "rm -rf dist",
+    "prepare": "npm run build",
+    "prebuild": "npm run clean"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "hudu",
+    "it-documentation",
+    "api",
+    "typescript",
+    "nodejs"
+  ],
+  "author": "Aaron Sachs",
+  "license": "Apache-2.0",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.25.3",
+    "@wyre-technology/node-hudu": "latest",
+    "winston": "^3.11.0",
+    "zod": "^3.22.4"
+  },
+  "devDependencies": {
+    "@semantic-release/changelog": "^6.0.3",
+    "@semantic-release/git": "^10.0.1",
+    "@types/node": "^20.10.0",
+    "semantic-release": "^22.0.12",
+    "tsx": "^4.6.0",
+    "typescript": "^5.3.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
