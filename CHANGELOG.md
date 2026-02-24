@@ -1,3 +1,10 @@
+## [1.1.4](https://github.com/wyre-technology/hudu-mcp/compare/v1.1.3...v1.1.4) (2026-02-24)
+
+
+### Bug Fixes
+
+* update node-hudu to 1.0.1 with corrected exports map ([da657e0](https://github.com/wyre-technology/hudu-mcp/commit/da657e06a851e82f6029549c52bf4ba388144f92))
+
 ## [1.1.3](https://github.com/wyre-technology/hudu-mcp/compare/v1.1.2...v1.1.3) (2026-02-24)
 
 
