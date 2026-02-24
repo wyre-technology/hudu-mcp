@@ -133,3 +133,4 @@ jobs:
             COMMIT_SHA=${{ github.sha }}
             BUILD_DATE=${{ github.event.head_commit.timestamp }}
             NODE_AUTH_TOKEN=${{ secrets.GITHUB_TOKEN }}
+# Trigger rebuild
