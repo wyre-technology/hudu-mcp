@@ -28,6 +28,9 @@ COPY . .
 # Build the application
 RUN npm run build
 
+# Prune dev dependencies while auth is still available
+RUN npm prune --omit=dev && npm cache clean --force
+
 # Production stage
 FROM node:22-alpine AS production
 
@@ -38,14 +41,10 @@ RUN addgroup -g 1001 -S hudu && \
 # Set working directory
 WORKDIR /app
 
-# Copy package files, registry config, and built application from builder stage
-COPY package*.json ./
-COPY .npmrc ./
+# Copy built application and production node_modules from builder
+COPY --from=builder /app/package.json ./
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/node_modules ./node_modules
-
-# Prune dev dependencies (avoids re-installing git deps which need build tools)
-RUN npm prune --omit=dev && npm cache clean --force
 
 # Create logs directory
 RUN mkdir -p /app/logs && chown -R hudu:hudu /app
