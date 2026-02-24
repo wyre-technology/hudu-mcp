@@ -1,3 +1,10 @@
+## [1.1.5](https://github.com/wyre-technology/hudu-mcp/compare/v1.1.4...v1.1.5) (2026-02-24)
+
+
+### Bug Fixes
+
+* use stateless HTTP transport for multi-client gateway support ([d73a635](https://github.com/wyre-technology/hudu-mcp/commit/d73a63558a017ad8a61a1232dff3e701654bdaf8))
+
 ## [1.1.4](https://github.com/wyre-technology/hudu-mcp/compare/v1.1.3...v1.1.4) (2026-02-24)
 
 
