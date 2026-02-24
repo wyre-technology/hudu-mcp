@@ -5,6 +5,7 @@ FROM node:22-alpine AS builder
 ARG VERSION="unknown"
 ARG COMMIT_SHA="unknown"
 ARG BUILD_DATE="unknown"
+ARG NODE_AUTH_TOKEN
 
 # Update npm to latest for security fixes
 RUN npm install -g npm@latest
@@ -12,12 +13,17 @@ RUN npm install -g npm@latest
 # Set working directory
 WORKDIR /app
 
-# Copy package files and registry config
-COPY package*.json ./
-COPY .npmrc ./
+# Copy package files and .npmrc for GitHub Packages auth
+COPY package*.json .npmrc ./
+
+# Configure registry auth for GitHub Packages (needed to pull @wyre-technology/* deps)
+RUN echo "//npm.pkg.github.com/:_authToken=${NODE_AUTH_TOKEN}" >> .npmrc
 
 # Install dependencies (--ignore-scripts prevents 'prepare' from running before source is copied)
 RUN npm ci --ignore-scripts
+
+# Remove auth token from .npmrc after install
+RUN sed -i '/_authToken/d' .npmrc
 
 # Copy source code
 COPY . .
