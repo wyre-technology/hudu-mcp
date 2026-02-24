@@ -1,3 +1,10 @@
+## [1.1.3](https://github.com/wyre-technology/hudu-mcp/compare/v1.1.2...v1.1.3) (2026-02-24)
+
+
+### Bug Fixes
+
+* **docker:** prune dev deps in builder stage to preserve GitHub Packages deps ([7ee202b](https://github.com/wyre-technology/hudu-mcp/commit/7ee202bb65b1410d203b067f6d47b6c3caafa551))
+
 ## [1.1.2](https://github.com/wyre-technology/hudu-mcp/compare/v1.1.1...v1.1.2) (2026-02-24)
 
 
