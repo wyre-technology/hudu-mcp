@@ -17,6 +17,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- Gateway authentication mode (`AUTH_MODE=gateway`) for MCP Gateway integration at mcp.wyretechnology.com
+- Per-request credential extraction from `X-Hudu-Base-URL` and `X-Hudu-API-Key` HTTP headers
+- `parseCredentialsFromHeaders()` utility for header-based credential parsing
+- `HuduService.updateCredentials()` method for runtime client reinitialization
+- Dockerfile with multi-stage build (node:22-alpine), non-root `hudu` user, and health check
+- Docker build and push job in CI workflow (GHCR, multi-platform linux/amd64 + linux/arm64)
+- Auth mode reporting in `/health` endpoint response
+
 ## [1.0.0] - 2026-02-23
 
 ### Added

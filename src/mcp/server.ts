@@ -16,7 +16,7 @@ import {
 import { HuduService } from '../services/hudu.service.js';
 import { Logger } from '../utils/logger.js';
 import { McpServerConfig } from '../types/mcp.js';
-import { EnvironmentConfig } from '../utils/config.js';
+import { EnvironmentConfig, GatewayCredentials, parseCredentialsFromHeaders } from '../utils/config.js';
 import { HuduResourceHandler } from '../handlers/resource.handler.js';
 import { HuduToolHandler } from '../handlers/tool.handler.js';
 
@@ -117,9 +117,14 @@ export class HuduMcpServer {
     this.logger.info('Hudu MCP Server connected to stdio transport');
   }
 
+  /**
+   * Start with HTTP Streamable transport.
+   * In gateway mode, credentials are extracted from request headers on each request.
+   */
   private async startHttpTransport(): Promise<void> {
     const port = this.envConfig?.transport?.port || 8080;
     const host = this.envConfig?.transport?.host || '0.0.0.0';
+    const isGatewayMode = this.envConfig?.auth?.mode === 'gateway';
 
     this.httpTransport = new StreamableHTTPServerTransport({
       sessionIdGenerator: () => randomUUID(),
@@ -129,13 +134,40 @@ export class HuduMcpServer {
     this.httpServer = createServer((req: IncomingMessage, res: ServerResponse) => {
       const url = new URL(req.url || '/', `http://${req.headers.host || 'localhost'}`);
 
+      // Health endpoint — no auth required
       if (url.pathname === '/health') {
         res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ status: 'ok', transport: 'http', timestamp: new Date().toISOString() }));
+        res.end(JSON.stringify({
+          status: 'ok',
+          transport: 'http',
+          authMode: isGatewayMode ? 'gateway' : 'env',
+          timestamp: new Date().toISOString()
+        }));
         return;
       }
 
+      // MCP endpoint
       if (url.pathname === '/mcp') {
+        // In gateway mode, extract credentials from headers before handling
+        if (isGatewayMode) {
+          const credentials = this.extractGatewayCredentials(req);
+          if (!credentials.baseUrl || !credentials.apiKey) {
+            this.logger.warn('Gateway mode: Missing required credentials in headers', {
+              hasBaseUrl: !!credentials.baseUrl,
+              hasApiKey: !!credentials.apiKey,
+            });
+            res.writeHead(401, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({
+              error: 'Missing credentials',
+              message: 'Gateway mode requires X-Hudu-Base-URL and X-Hudu-API-Key headers',
+              required: ['X-Hudu-Base-URL', 'X-Hudu-API-Key']
+            }));
+            return;
+          }
+          // Update service credentials for this request
+          this.updateCredentials(credentials);
+        }
+
         this.httpTransport!.handleRequest(req, res);
         return;
       }
@@ -150,9 +182,26 @@ export class HuduMcpServer {
       this.httpServer!.listen(port, host, () => {
         this.logger.info(`Hudu MCP Server listening on http://${host}:${port}/mcp`);
         this.logger.info(`Health check available at http://${host}:${port}/health`);
+        this.logger.info(`Authentication mode: ${isGatewayMode ? 'gateway (header-based)' : 'env (environment variables)'}`);
         resolve();
       });
     });
+  }
+
+  /**
+   * Extract credentials from gateway-injected HTTP headers.
+   */
+  private extractGatewayCredentials(req: IncomingMessage): GatewayCredentials {
+    const headers = req.headers as Record<string, string | string[] | undefined>;
+    return parseCredentialsFromHeaders(headers);
+  }
+
+  /**
+   * Update the Hudu service with new credentials from gateway headers.
+   */
+  private updateCredentials(credentials: GatewayCredentials): void {
+    this.huduService.updateCredentials(credentials.baseUrl!, credentials.apiKey!);
+    this.logger.debug('Updated Hudu credentials from gateway headers');
   }
 
   async stop(): Promise<void> {

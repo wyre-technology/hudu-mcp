@@ -243,6 +243,16 @@ export class HuduService {
     return client.magicDash.list(params);
   }
 
+  /**
+   * Reinitialize the Hudu client with new credentials.
+   * Used in gateway mode where credentials come from request headers.
+   */
+  updateCredentials(baseUrl: string, apiKey: string): void {
+    this.client = new HuduClient({ baseUrl, apiKey });
+    this.initializationPromise = null;
+    this.logger.debug('Hudu client reinitialized with new credentials');
+  }
+
   // Test connection
   async testConnection(): Promise<boolean> {
     try {
