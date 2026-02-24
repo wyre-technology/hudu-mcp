@@ -1,3 +1,10 @@
+# [1.1.0](https://github.com/wyre-technology/hudu-mcp/compare/v1.0.0...v1.1.0) (2026-02-24)
+
+
+### Features
+
+* add gateway authentication mode and Dockerfile ([5111615](https://github.com/wyre-technology/hudu-mcp/commit/511161537e02773166b49b8ee639439c8398f9a8))
+
 # 1.0.0 (2026-02-24)
 
 
