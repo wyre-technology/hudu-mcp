@@ -1,3 +1,10 @@
+## [1.1.1](https://github.com/wyre-technology/hudu-mcp/compare/v1.1.0...v1.1.1) (2026-02-24)
+
+
+### Bug Fixes
+
+* **docker:** add NODE_AUTH_TOKEN for GitHub Packages auth in Docker build ([742e371](https://github.com/wyre-technology/hudu-mcp/commit/742e371b315436faa22fd95a38fb8c64e8027fc9))
+
 # [1.1.0](https://github.com/wyre-technology/hudu-mcp/compare/v1.0.0...v1.1.0) (2026-02-24)
 
 
