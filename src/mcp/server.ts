@@ -21,20 +21,34 @@ import { HuduToolHandler } from '../handlers/tool.handler.js';
 
 export class HuduMcpServer {
   private server: Server;
+  private config: McpServerConfig;
   private huduService: HuduService;
   private resourceHandler: HuduResourceHandler;
   private toolHandler: HuduToolHandler;
   private logger: Logger;
   private envConfig: EnvironmentConfig | undefined;
   private httpServer?: HttpServer;
-  private httpTransport?: StreamableHTTPServerTransport;
 
   constructor(config: McpServerConfig, logger: Logger, envConfig?: EnvironmentConfig) {
     this.logger = logger;
+    this.config = config;
     this.envConfig = envConfig;
 
-    this.server = new Server(
-      { name: config.name, version: config.version },
+    this.huduService = new HuduService(config, logger);
+    this.resourceHandler = new HuduResourceHandler(this.huduService, logger);
+    this.toolHandler = new HuduToolHandler(this.huduService, logger);
+
+    // Create default server (used for stdio mode)
+    this.server = this.createFreshServer();
+  }
+
+  /**
+   * Create a fresh MCP Server with all handlers registered.
+   * Called per-request in HTTP mode so each request gets a clean server.
+   */
+  private createFreshServer(): Server {
+    const server = new Server(
+      { name: this.config.name, version: this.config.version },
       {
         capabilities: {
           resources: { subscribe: false, listChanged: true },
@@ -44,16 +58,17 @@ export class HuduMcpServer {
       }
     );
 
-    this.huduService = new HuduService(config, logger);
-    this.resourceHandler = new HuduResourceHandler(this.huduService, logger);
-    this.toolHandler = new HuduToolHandler(this.huduService, logger);
-    this.setupHandlers();
+    server.onerror = (error) => this.logger.error('MCP Server error:', error);
+    server.oninitialized = () => this.logger.info('MCP Server initialized and ready');
+
+    this.setupHandlers(server);
+    return server;
   }
 
-  private setupHandlers(): void {
+  private setupHandlers(server: Server): void {
     this.logger.info('Setting up MCP request handlers...');
 
-    this.server.setRequestHandler(ListResourcesRequestSchema, async () => {
+    server.setRequestHandler(ListResourcesRequestSchema, async () => {
       try {
         const resources = await this.resourceHandler.listResources();
         return { resources };
@@ -63,7 +78,7 @@ export class HuduMcpServer {
       }
     });
 
-    this.server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
+    server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
       try {
         const content = await this.resourceHandler.readResource(request.params.uri);
         return { contents: [content] };
@@ -73,7 +88,7 @@ export class HuduMcpServer {
       }
     });
 
-    this.server.setRequestHandler(ListToolsRequestSchema, async () => {
+    server.setRequestHandler(ListToolsRequestSchema, async () => {
       try {
         const tools = await this.toolHandler.listTools();
         return { tools };
@@ -83,7 +98,7 @@ export class HuduMcpServer {
       }
     });
 
-    this.server.setRequestHandler(CallToolRequestSchema, async (request) => {
+    server.setRequestHandler(CallToolRequestSchema, async (request) => {
       try {
         const result = await this.toolHandler.callTool(request.params.name, request.params.arguments || {});
         return { content: result.content, isError: result.isError };
@@ -100,9 +115,6 @@ export class HuduMcpServer {
     const transportType = this.envConfig?.transport?.type || 'stdio';
     this.logger.info(`Starting Hudu MCP Server with ${transportType} transport...`);
 
-    this.server.onerror = (error) => this.logger.error('MCP Server error:', error);
-    this.server.oninitialized = () => this.logger.info('MCP Server initialized and ready');
-
     if (transportType === 'http') {
       await this.startHttpTransport();
     } else {
@@ -118,21 +130,13 @@ export class HuduMcpServer {
 
   /**
    * Start with HTTP Streamable transport.
-   * In gateway mode, credentials are extracted from request headers on each request.
+   * Stateless: each request gets a fresh Server + Transport so multiple
+   * clients (via the gateway) never hit "Server already initialized".
    */
   private async startHttpTransport(): Promise<void> {
     const port = this.envConfig?.transport?.port || 8080;
     const host = this.envConfig?.transport?.host || '0.0.0.0';
     const isGatewayMode = this.envConfig?.auth?.mode === 'gateway';
-
-    // Stateless mode: no session IDs. The gateway manages per-user sessions;
-    // the backend just processes each request independently.  This allows
-    // multiple clients (via the gateway) to hit the same server instance
-    // without "Server already initialized" errors.
-    this.httpTransport = new StreamableHTTPServerTransport({
-      sessionIdGenerator: undefined,
-      enableJsonResponse: true,
-    });
 
     this.httpServer = createServer((req: IncomingMessage, res: ServerResponse) => {
       const url = new URL(req.url || '/', `http://${req.headers.host || 'localhost'}`);
@@ -149,8 +153,19 @@ export class HuduMcpServer {
         return;
       }
 
-      // MCP endpoint
+      // MCP endpoint — stateless: fresh server + transport per request
       if (url.pathname === '/mcp') {
+        // Only POST is supported in stateless mode
+        if (req.method !== 'POST') {
+          res.writeHead(405, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({
+            jsonrpc: '2.0',
+            error: { code: -32000, message: 'Method not allowed' },
+            id: null,
+          }));
+          return;
+        }
+
         // In gateway mode, extract credentials from headers before handling
         if (isGatewayMode) {
           const credentials = this.extractGatewayCredentials(req);
@@ -171,15 +186,37 @@ export class HuduMcpServer {
           this.updateCredentials(credentials);
         }
 
-        this.httpTransport!.handleRequest(req, res);
+        // Stateless: create fresh server + transport for each request
+        const server = this.createFreshServer();
+        const transport = new StreamableHTTPServerTransport({
+          enableJsonResponse: true,
+        });
+
+        res.on('close', () => {
+          transport.close();
+          server.close();
+        });
+
+        server.connect(transport as unknown as Transport).then(() => {
+          transport.handleRequest(req, res);
+        }).catch((err) => {
+          this.logger.error('MCP transport error:', err);
+          if (!res.headersSent) {
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({
+              jsonrpc: '2.0',
+              error: { code: -32603, message: 'Internal error' },
+              id: null,
+            }));
+          }
+        });
+
         return;
       }
 
       res.writeHead(404, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ error: 'Not found', endpoints: ['/mcp', '/health'] }));
     });
-
-    await this.server.connect(this.httpTransport as unknown as Transport);
 
     await new Promise<void>((resolve) => {
       this.httpServer!.listen(port, host, () => {
@@ -191,17 +228,11 @@ export class HuduMcpServer {
     });
   }
 
-  /**
-   * Extract credentials from gateway-injected HTTP headers.
-   */
   private extractGatewayCredentials(req: IncomingMessage): GatewayCredentials {
     const headers = req.headers as Record<string, string | string[] | undefined>;
     return parseCredentialsFromHeaders(headers);
   }
 
-  /**
-   * Update the Hudu service with new credentials from gateway headers.
-   */
   private updateCredentials(credentials: GatewayCredentials): void {
     this.huduService.updateCredentials(credentials.baseUrl!, credentials.apiKey!);
     this.logger.debug('Updated Hudu credentials from gateway headers');
