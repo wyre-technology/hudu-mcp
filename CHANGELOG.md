@@ -1,3 +1,10 @@
+## [1.1.7](https://github.com/wyre-technology/hudu-mcp/compare/v1.1.6...v1.1.7) (2026-02-24)
+
+
+### Bug Fixes
+
+* **deps:** update node-hudu SDK to fix response body double-read ([4f6b679](https://github.com/wyre-technology/hudu-mcp/commit/4f6b679707301e435a8ddbbbe8ff0a98dbb131b7))
+
 ## [1.1.6](https://github.com/wyre-technology/hudu-mcp/compare/v1.1.5...v1.1.6) (2026-02-24)
 
 
