@@ -1,3 +1,15 @@
+# 1.0.0 (2026-02-24)
+
+
+### Bug Fixes
+
+* add semantic-release branch configuration ([0ba664a](https://github.com/wyre-technology/hudu-mcp/commit/0ba664ad48ef42f1c2abd2b066a3f25ae9df4912))
+
+
+### Features
+
+* initial hudu-mcp server with 39 tools ([9951ad6](https://github.com/wyre-technology/hudu-mcp/commit/9951ad606c5f7a35c76bcb38b3c3af2f341f349f))
+
 # Changelog
 
 All notable changes to this project will be documented in this file.
