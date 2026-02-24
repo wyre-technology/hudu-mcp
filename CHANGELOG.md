@@ -1,3 +1,10 @@
+## [1.1.6](https://github.com/wyre-technology/hudu-mcp/compare/v1.1.5...v1.1.6) (2026-02-24)
+
+
+### Bug Fixes
+
+* use per-request Server+Transport for stateless HTTP mode ([c0193d4](https://github.com/wyre-technology/hudu-mcp/commit/c0193d45f6f3753d8cb5815843e402643fefbd81))
+
 ## [1.1.5](https://github.com/wyre-technology/hudu-mcp/compare/v1.1.4...v1.1.5) (2026-02-24)
 
 
