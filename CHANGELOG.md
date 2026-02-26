@@ -1,3 +1,10 @@
+## [1.1.8](https://github.com/wyre-technology/hudu-mcp/compare/v1.1.7...v1.1.8) (2026-02-26)
+
+
+### Bug Fixes
+
+* **ci:** remove unused discord-release.yml ([78ea883](https://github.com/wyre-technology/hudu-mcp/commit/78ea8833f7582fd272b46550f6130cd7687b0930))
+
 ## [1.1.7](https://github.com/wyre-technology/hudu-mcp/compare/v1.1.6...v1.1.7) (2026-02-24)
 
 
