@@ -45,8 +45,14 @@ export class HuduMcpServer {
   /**
    * Create a fresh MCP Server with all handlers registered.
    * Called per-request in HTTP mode so each request gets a clean server.
+   *
+   * In gateway mode, per-request handlers are passed so each request is fully
+   * isolated — no shared mutable state between concurrent requests.
    */
-  private createFreshServer(): Server {
+  private createFreshServer(
+    perRequestToolHandler?: HuduToolHandler,
+    perRequestResourceHandler?: HuduResourceHandler,
+  ): Server {
     const server = new Server(
       { name: this.config.name, version: this.config.version },
       {
@@ -61,16 +67,47 @@ export class HuduMcpServer {
     server.onerror = (error) => this.logger.error('MCP Server error:', error);
     server.oninitialized = () => this.logger.info('MCP Server initialized and ready');
 
-    this.setupHandlers(server);
+    this.setupHandlers(
+      server,
+      perRequestToolHandler ?? this.toolHandler,
+      perRequestResourceHandler ?? this.resourceHandler,
+    );
     return server;
   }
 
-  private setupHandlers(server: Server): void {
+  /**
+   * Build per-request service + handlers from gateway credentials.
+   * Returns fully isolated instances that won't be affected by concurrent requests.
+   */
+  private buildPerRequestHandlers(credentials: GatewayCredentials): {
+    toolHandler: HuduToolHandler;
+    resourceHandler: HuduResourceHandler;
+  } {
+    const requestConfig: McpServerConfig = {
+      ...this.config,
+      hudu: {
+        ...this.config.hudu,
+        baseUrl: credentials.baseUrl!,
+        apiKey: credentials.apiKey!,
+      },
+    };
+    const service = new HuduService(requestConfig, this.logger);
+    return {
+      resourceHandler: new HuduResourceHandler(service, this.logger),
+      toolHandler: new HuduToolHandler(service, this.logger),
+    };
+  }
+
+  private setupHandlers(
+    server: Server,
+    toolHandler: HuduToolHandler,
+    resourceHandler: HuduResourceHandler,
+  ): void {
     this.logger.info('Setting up MCP request handlers...');
 
     server.setRequestHandler(ListResourcesRequestSchema, async () => {
       try {
-        const resources = await this.resourceHandler.listResources();
+        const resources = await resourceHandler.listResources();
         return { resources };
       } catch (error) {
         this.logger.error('Failed to list resources:', error);
@@ -80,7 +117,7 @@ export class HuduMcpServer {
 
     server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
       try {
-        const content = await this.resourceHandler.readResource(request.params.uri);
+        const content = await resourceHandler.readResource(request.params.uri);
         return { contents: [content] };
       } catch (error) {
         this.logger.error(`Failed to read resource ${request.params.uri}:`, error);
@@ -90,7 +127,7 @@ export class HuduMcpServer {
 
     server.setRequestHandler(ListToolsRequestSchema, async () => {
       try {
-        const tools = await this.toolHandler.listTools();
+        const tools = await toolHandler.listTools();
         return { tools };
       } catch (error) {
         this.logger.error('Failed to list tools:', error);
@@ -100,7 +137,7 @@ export class HuduMcpServer {
 
     server.setRequestHandler(CallToolRequestSchema, async (request) => {
       try {
-        const result = await this.toolHandler.callTool(request.params.name, request.params.arguments || {});
+        const result = await toolHandler.callTool(request.params.name, request.params.arguments || {});
         return { content: result.content, isError: result.isError };
       } catch (error) {
         this.logger.error(`Failed to call tool ${request.params.name}:`, error);
@@ -166,7 +203,12 @@ export class HuduMcpServer {
           return;
         }
 
-        // In gateway mode, extract credentials from headers before handling
+        // In gateway mode, build per-request service + handlers from the
+        // injected credential headers. Each request gets its own isolated
+        // HuduService so concurrent requests for different tenants
+        // never interfere with each other.
+        let perRequestToolHandler: HuduToolHandler | undefined;
+        let perRequestResourceHandler: HuduResourceHandler | undefined;
         if (isGatewayMode) {
           const credentials = this.extractGatewayCredentials(req);
           if (!credentials.baseUrl || !credentials.apiKey) {
@@ -182,12 +224,13 @@ export class HuduMcpServer {
             }));
             return;
           }
-          // Update service credentials for this request
-          this.updateCredentials(credentials);
+          const handlers = this.buildPerRequestHandlers(credentials);
+          perRequestToolHandler = handlers.toolHandler;
+          perRequestResourceHandler = handlers.resourceHandler;
         }
 
         // Stateless: create fresh server + transport for each request
-        const server = this.createFreshServer();
+        const server = this.createFreshServer(perRequestToolHandler, perRequestResourceHandler);
         const transport = new StreamableHTTPServerTransport({
           enableJsonResponse: true,
         });
@@ -231,11 +274,6 @@ export class HuduMcpServer {
   private extractGatewayCredentials(req: IncomingMessage): GatewayCredentials {
     const headers = req.headers as Record<string, string | string[] | undefined>;
     return parseCredentialsFromHeaders(headers);
-  }
-
-  private updateCredentials(credentials: GatewayCredentials): void {
-    this.huduService.updateCredentials(credentials.baseUrl!, credentials.apiKey!);
-    this.logger.debug('Updated Hudu credentials from gateway headers');
   }
 
   async stop(): Promise<void> {
